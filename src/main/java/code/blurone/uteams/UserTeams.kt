@@ -78,12 +78,9 @@ class UserTeams : JavaPlugin() {
             .withAliases("uteam", "userteam", "userteams")
             .withSubcommands(
                 CommandAPICommand("create")
-                    //.withRequirements() no estar en otro team
-                    .withArguments(StringArgument("codename"))
                     .withRequirement{ !isInTeam(it) }
-                    .executesPlayer(PlayerCommandExecutor { player, args ->
-
-                    }),
+                    .withArguments(StringArgument("codename"))
+                    .withOptionalArguments(ChatComponentArgument("displayName"))
                 CommandAPICommand("disband")
                     .withAliases("disolve")
                     .withRequirement(::isTeamOwner)
