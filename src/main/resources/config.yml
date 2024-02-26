@@ -1,0 +1,12 @@
+# What aspects of a team can be modified by a team owner.
+# For more info see https://minecraft.wiki/w/Commands/team
+modifiable_team_options:
+  displayName: true
+  color: true
+  friendlyFire: true
+  seeFriendlyInvisibles: false
+  nametagVisibility: false
+  deathMessageVisibility: false
+  collisionRule: false
+  prefix: true
+  suffix: true
