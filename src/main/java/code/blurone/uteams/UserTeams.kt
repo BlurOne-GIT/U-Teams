@@ -7,7 +7,10 @@ import dev.jorel.commandapi.arguments.*
 import dev.jorel.commandapi.executors.CommandArguments
 import dev.jorel.commandapi.executors.CommandExecutor
 import dev.jorel.commandapi.executors.PlayerCommandExecutor
+import net.md_5.bungee.api.ChatColor
 import net.md_5.bungee.api.chat.BaseComponent
+import net.md_5.bungee.api.chat.ClickEvent
+import net.md_5.bungee.api.chat.ComponentBuilder
 import org.bukkit.NamespacedKey
 import org.bukkit.command.CommandSender
 import org.bukkit.configuration.file.YamlConfiguration
@@ -87,7 +90,7 @@ class UserTeams : JavaPlugin() {
         CommandAPICommand("uteams")
             .withAliases("uteam", "userteam", "userteams")
             .withSubcommands(
-                CommandAPICommand("create")
+                CommandAPICommand("create") // /uteams create <codename> [displayName]
                     .withRequirement{ !isInTeam(it) }
                     .withArguments(StringArgument("codename"))
                     .withOptionalArguments(ChatComponentArgument("displayName"))
@@ -95,9 +98,19 @@ class UserTeams : JavaPlugin() {
                 CommandAPICommand("disband")
                     .withAliases("disolve")
                     .withRequirement(::isTeamOwner)
-                    .executesPlayer(PlayerCommandExecutor { player, args ->
+                    .executesPlayer(PlayerCommandExecutor(::disbandTeamInitiation))
+                    .withSubcommands(
+                        CommandAPICommand("confirm")
+                            .withRequirement { isInConfirmation(it, "disband") }
+                            .executesPlayer(PlayerCommandExecutor { player, args ->
 
-                    }),
+                            }),
+                        CommandAPICommand("cancel")
+                            .withRequirement { isInConfirmation(it, "disband") }
+                            .executesPlayer(PlayerCommandExecutor { player, args ->
+
+                            })
+                    ),
                 CommandAPICommand("invite")
                     .withRequirement(::isTeamOwner)
                     .withArguments(PlayerArgument("player"))
@@ -180,6 +193,23 @@ class UserTeams : JavaPlugin() {
         scoreboard.registerNewTeam("$codename+owner").addEntry("+${sender.name}")
         CommandAPI.updateRequirements(sender)
     }
+
+    private fun disbandTeamInitiation(sender: Player, args: CommandArguments) {
+        sender.persistentDataContainer.set(confirmationNamespacedKey, PersistentDataType.STRING, "disband")
+        CommandAPI.updateRequirements(sender)
+        sender.spigot().sendMessage(
+            *ComponentBuilder(getTranslation("disband_initiation", sender.locale))
+                .append("\n[").color(ChatColor.GRAY)
+                .append(getTranslation("yes", sender.locale)).color(ChatColor.GREEN).bold(true)
+                .event(ClickEvent(ClickEvent.Action.RUN_COMMAND, "/uteams disband confirm"))
+                .append("/").color(ChatColor.GRAY).bold(false)
+                .append(getTranslation("no", sender.locale)).color(ChatColor.RED).bold(true)
+                .event(ClickEvent(ClickEvent.Action.RUN_COMMAND, "/uteams disband cancel"))
+                .append("]").color(ChatColor.GRAY).bold(false)
+                .create()
+        )
+    }
+
     companion object {
         private val supportedTranslations = listOf<String>(/*"en", "es"*/) // TODO: uncomment when translations are ready
         private val translations = mutableMapOf<String, YamlConfiguration>()
