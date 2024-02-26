@@ -102,9 +102,7 @@ class UserTeams : JavaPlugin() {
                     .withSubcommands(
                         CommandAPICommand("confirm")
                             .withRequirement { isInConfirmation(it, "disband") }
-                            .executesPlayer(PlayerCommandExecutor { player, args ->
-
-                            }),
+                            .executesPlayer(PlayerCommandExecutor(::disbandConfirm)),
                         CommandAPICommand("cancel")
                             .withRequirement { isInConfirmation(it, "disband") }
                             .executesPlayer(PlayerCommandExecutor { player, _ -> cancelConfirmation(player) })
@@ -213,6 +211,19 @@ class UserTeams : JavaPlugin() {
                 .append("]").color(ChatColor.GRAY).bold(false)
                 .create()
         )
+    }
+
+    private fun disbandConfirm(sender: Player, args: CommandArguments) {
+        sender.persistentDataContainer.remove(confirmationNamespacedKey)
+        val team = scoreboard.getEntryTeam(sender.name)
+        val members = team?.entries
+        team?.unregister()
+        scoreboard.getEntryTeam("+${sender.name}")?.unregister()
+        CommandAPI.updateRequirements(sender)
+        members?.forEach {
+            val player = server.getPlayerExact(it)
+            player?.sendMessage(getTranslation("team_disbanded", player.locale))
+        }
     }
 
     companion object {
