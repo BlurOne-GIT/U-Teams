@@ -151,5 +151,6 @@ class UserTeams : JavaPlugin() {
             }
         }
         scoreboard.registerNewTeam("$codename+owner").addEntry("+${sender.name}")
+        CommandAPI.updateRequirements(sender)
     }
 }
