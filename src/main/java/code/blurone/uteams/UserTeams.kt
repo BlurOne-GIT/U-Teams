@@ -23,7 +23,7 @@ class UserTeams : JavaPlugin() {
         if (optionsOptions?.getBoolean("displayName") != false)
             optionCommands.add(CommandAPICommand("displayName")
                 .withRequirement(::isTeamOwner)
-                .withArguments(TextArgument("value"))
+                .withArguments(ChatComponentArgument("value"))
             )
 
         if (optionsOptions?.getBoolean("color") != false)
@@ -65,13 +65,13 @@ class UserTeams : JavaPlugin() {
         if (optionsOptions?.getBoolean("prefix") != false)
             optionCommands.add(CommandAPICommand("prefix")
                 .withRequirement(::isTeamOwner)
-                .withArguments(TextArgument("value"))
+                .withArguments(ChatComponentArgument("value"))
             )
 
         if (optionsOptions?.getBoolean("suffix") != false)
             optionCommands.add(CommandAPICommand("suffix")
                 .withRequirement(::isTeamOwner)
-                .withArguments(TextArgument("value"))
+                .withArguments(ChatComponentArgument("value"))
             )
 
         CommandAPICommand("uteams")
