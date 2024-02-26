@@ -8,14 +8,17 @@ import dev.jorel.commandapi.executors.CommandArguments
 import dev.jorel.commandapi.executors.CommandExecutor
 import dev.jorel.commandapi.executors.PlayerCommandExecutor
 import net.md_5.bungee.api.chat.BaseComponent
+import org.bukkit.NamespacedKey
 import org.bukkit.command.CommandSender
 import org.bukkit.configuration.file.YamlConfiguration
 import org.bukkit.entity.Player
+import org.bukkit.persistence.PersistentDataType
 import org.bukkit.plugin.java.JavaPlugin
 import java.io.File
 
 class UserTeams : JavaPlugin() {
     private val scoreboard get() = server.scoreboardManager?.mainScoreboard ?: throw NullPointerException("Main scoreboard not found")
+    private val confirmationNamespacedKey = NamespacedKey(this, "confirmation")
 
     override fun onLoad() {
         CommandAPI.onLoad(CommandAPIBukkitConfig(this)
@@ -158,6 +161,10 @@ class UserTeams : JavaPlugin() {
 
     private fun isInTeam(sender: CommandSender): Boolean {
         return scoreboard.getEntryTeam(sender.name) != null
+    }
+
+    private fun isInConfirmation(sender: CommandSender, action: String): Boolean {
+        return sender is Player && sender.persistentDataContainer.get(confirmationNamespacedKey, PersistentDataType.STRING) == action
     }
 
     private fun createTeam(sender: Player, args: CommandArguments) {
