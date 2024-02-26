@@ -10,6 +10,8 @@ import org.bukkit.command.CommandSender
 import org.bukkit.plugin.java.JavaPlugin
 
 class UserTeams : JavaPlugin() {
+    private val scoreboard get() = server.scoreboardManager?.mainScoreboard ?: throw NullPointerException("Main scoreboard not found")
+
     override fun onLoad() {
         CommandAPI.onLoad(CommandAPIBukkitConfig(this)
             .verboseOutput(true) // DEBUG
