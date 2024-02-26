@@ -21,7 +21,7 @@ class UserTeams : JavaPlugin() {
             .silentLogs(false)
         )
 
-        val optionsOptions = config.getConfigurationSection("options")
+        val optionsOptions = config.getConfigurationSection("modifiable_team_options")
 
         val optionCommands = mutableListOf<CommandAPICommand>() // /uteams option <subcommands> <value>
 
