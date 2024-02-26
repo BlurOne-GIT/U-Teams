@@ -192,6 +192,7 @@ class UserTeams : JavaPlugin() {
         }
         scoreboard.registerNewTeam("$codename+owner").addEntry("+${sender.name}")
         CommandAPI.updateRequirements(sender)
+        sender.sendMessage(getTranslation("team_created", sender.locale))
     }
 
     private fun disbandTeamInitiation(sender: Player, args: CommandArguments) {
