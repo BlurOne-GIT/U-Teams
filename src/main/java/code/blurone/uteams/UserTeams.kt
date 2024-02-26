@@ -107,9 +107,7 @@ class UserTeams : JavaPlugin() {
                             }),
                         CommandAPICommand("cancel")
                             .withRequirement { isInConfirmation(it, "disband") }
-                            .executesPlayer(PlayerCommandExecutor { player, args ->
-
-                            })
+                            .executesPlayer(PlayerCommandExecutor { player, _ -> cancelConfirmation(player) })
                     ),
                 CommandAPICommand("invite")
                     .withRequirement(::isTeamOwner)
@@ -178,6 +176,12 @@ class UserTeams : JavaPlugin() {
 
     private fun isInConfirmation(sender: CommandSender, action: String): Boolean {
         return sender is Player && sender.persistentDataContainer.get(confirmationNamespacedKey, PersistentDataType.STRING) == action
+    }
+
+    private fun cancelConfirmation(sender: Player) {
+        sender.persistentDataContainer.remove(confirmationNamespacedKey)
+        CommandAPI.updateRequirements(sender)
+        sender.sendMessage(getTranslation("action_cancelled", sender.locale))
     }
 
     private fun createTeam(sender: Player, args: CommandArguments) {

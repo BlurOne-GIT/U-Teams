@@ -1,4 +1,5 @@
 yes: "Yes"
 no: "No"
+action_cancelled: "Action cancelled."
 team_created: "Your team has been created successfully."
 disband_initiation: "Are you sure you want to disband the team?"
