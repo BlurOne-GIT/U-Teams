@@ -4,9 +4,12 @@ import dev.jorel.commandapi.CommandAPI
 import dev.jorel.commandapi.CommandAPIBukkitConfig
 import dev.jorel.commandapi.CommandAPICommand
 import dev.jorel.commandapi.arguments.*
+import dev.jorel.commandapi.executors.CommandArguments
 import dev.jorel.commandapi.executors.CommandExecutor
 import dev.jorel.commandapi.executors.PlayerCommandExecutor
+import net.md_5.bungee.api.chat.BaseComponent
 import org.bukkit.command.CommandSender
+import org.bukkit.entity.Player
 import org.bukkit.plugin.java.JavaPlugin
 
 class UserTeams : JavaPlugin() {
@@ -83,6 +86,7 @@ class UserTeams : JavaPlugin() {
                     .withRequirement{ !isInTeam(it) }
                     .withArguments(StringArgument("codename"))
                     .withOptionalArguments(ChatComponentArgument("displayName"))
+                    .executesPlayer(PlayerCommandExecutor(::createTeam)),
                 CommandAPICommand("disband")
                     .withAliases("disolve")
                     .withRequirement(::isTeamOwner)
@@ -134,5 +138,18 @@ class UserTeams : JavaPlugin() {
 
     private fun isInTeam(sender: CommandSender): Boolean {
         return scoreboard.getEntryTeam(sender.name) != null
+    }
+
+    private fun createTeam(sender: Player, args: CommandArguments) {
+        val codename = args["codename"] as String
+        scoreboard.registerNewTeam(codename).let {
+            it.addEntry(sender.name)
+            args["displayName"]?.let { displayComponents ->
+                it.displayName = (displayComponents as Array<*>).joinToString("") {
+                    component -> (component as BaseComponent).toLegacyText()
+                }
+            }
+        }
+        scoreboard.registerNewTeam("$codename+owner").addEntry("+${sender.name}")
     }
 }
