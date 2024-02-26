@@ -129,7 +129,7 @@ class UserTeams : JavaPlugin() {
     }
 
     private fun isTeamOwner(sender: CommandSender): Boolean {
-        TODO("Not yet implemented")
+        return scoreboard.getEntryTeam("+${sender.name}") != null
     }
 
     private fun isInTeam(sender: CommandSender): Boolean {
