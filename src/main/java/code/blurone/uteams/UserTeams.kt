@@ -9,8 +9,10 @@ import dev.jorel.commandapi.executors.CommandExecutor
 import dev.jorel.commandapi.executors.PlayerCommandExecutor
 import net.md_5.bungee.api.chat.BaseComponent
 import org.bukkit.command.CommandSender
+import org.bukkit.configuration.file.YamlConfiguration
 import org.bukkit.entity.Player
 import org.bukkit.plugin.java.JavaPlugin
+import java.io.File
 
 class UserTeams : JavaPlugin() {
     private val scoreboard get() = server.scoreboardManager?.mainScoreboard ?: throw NullPointerException("Main scoreboard not found")
@@ -124,7 +126,25 @@ class UserTeams : JavaPlugin() {
 
     override fun onEnable() {
         // Plugin startup logic
+        saveDefaultConfig()
         CommandAPI.onEnable()
+        saveResource("translations/default.yml", true)
+        supportedTranslations.forEach {
+            if (!File(dataFolder, "translations/$it.yml").exists())
+                saveResource("translations/$it.yml", false)
+        }
+        for (file in dataFolder.resolve("translations").listFiles()!!) {
+            if (file.extension != "yml") continue
+
+            translations[file.nameWithoutExtension.lowercase()] = try {
+                val yaml = YamlConfiguration()
+                yaml.load(file)
+                yaml
+            } catch (e: Exception) {
+                logger.warning("Failed to load ${file.name}.")
+                continue
+            }
+        }
     }
 
     override fun onDisable() {
@@ -152,5 +172,17 @@ class UserTeams : JavaPlugin() {
         }
         scoreboard.registerNewTeam("$codename+owner").addEntry("+${sender.name}")
         CommandAPI.updateRequirements(sender)
+    }
+    companion object {
+        private val supportedTranslations = listOf<String>(/*"en", "es"*/) // TODO: uncomment when translations are ready
+        private val translations = mutableMapOf<String, YamlConfiguration>()
+
+        fun getTranslation(key: String, locale: String): String
+        {
+            return translations[locale.lowercase()]?.getString(key) ?:
+            translations[locale.split('_')[0].lowercase()]?.getString(key) ?:
+            translations["default"]?.getString(key) ?:
+            key
+        }
     }
 }
