@@ -133,6 +133,6 @@ class UserTeams : JavaPlugin() {
     }
 
     private fun isInTeam(sender: CommandSender): Boolean {
-        TODO("Not yet implemented")
+        return scoreboard.getEntryTeam(sender.name) != null
     }
 }
