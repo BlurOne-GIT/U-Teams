@@ -2,6 +2,11 @@ package code.blurone.uteams
 
 import dev.jorel.commandapi.CommandAPI
 import dev.jorel.commandapi.CommandAPIBukkitConfig
+import dev.jorel.commandapi.CommandAPICommand
+import dev.jorel.commandapi.arguments.*
+import dev.jorel.commandapi.executors.CommandExecutor
+import dev.jorel.commandapi.executors.PlayerCommandExecutor
+import org.bukkit.command.CommandSender
 import org.bukkit.plugin.java.JavaPlugin
 
 class UserTeams : JavaPlugin() {
@@ -10,6 +15,108 @@ class UserTeams : JavaPlugin() {
             .verboseOutput(true) // DEBUG
             .silentLogs(false)
         )
+
+        val optionsOptions = config.getConfigurationSection("options")
+
+        val optionCommands = mutableListOf<CommandAPICommand>() // /uteams option <subcommands> <value>
+
+        if (optionsOptions?.getBoolean("displayName") != false)
+            optionCommands.add(CommandAPICommand("displayName")
+                .withRequirement(::isTeamOwner)
+                .withArguments(TextArgument("value"))
+            )
+
+        if (optionsOptions?.getBoolean("color") != false)
+            optionCommands.add(CommandAPICommand("color")
+                .withRequirement(::isTeamOwner)
+                .withArguments(ChatColorArgument("value"))
+            )
+
+        if (optionsOptions?.getBoolean("friendlyFire") != false)
+            optionCommands.add(CommandAPICommand("friendlyFire")
+                .withRequirement(::isTeamOwner)
+                .withArguments(BooleanArgument("value"))
+            )
+
+        if (optionsOptions?.getBoolean("seeFriendlyInvisibles") == true)
+            optionCommands.add(CommandAPICommand("seeFriendlyInvisibles")
+                .withRequirement(::isTeamOwner)
+                .withArguments(BooleanArgument("value"))
+            )
+
+        if (optionsOptions?.getBoolean("nametagVisibility") == true)
+            optionCommands.add(CommandAPICommand("nametagVisibility")
+                .withRequirement(::isTeamOwner)
+                .withArguments(MultiLiteralArgument("value", "always", "hideForOwnTeam"))
+            )
+
+        if (optionsOptions?.getBoolean("deathMessageVisibility") == true)
+            optionCommands.add(CommandAPICommand("deathMessageVisibility")
+                .withRequirement(::isTeamOwner)
+                .withArguments(MultiLiteralArgument("value", "always", "hideForOwnTeam"))
+            )
+
+        if (optionsOptions?.getBoolean("collisionRule") == true)
+            optionCommands.add(CommandAPICommand("collisionRule")
+                .withRequirement(::isTeamOwner)
+                .withArguments(MultiLiteralArgument("value", "always", "pushOwnTeam" /* shall be mapped to actual but erroneous pushOtherTeams*/))
+            )
+
+        if (optionsOptions?.getBoolean("prefix") != false)
+            optionCommands.add(CommandAPICommand("prefix")
+                .withRequirement(::isTeamOwner)
+                .withArguments(TextArgument("value"))
+            )
+
+        if (optionsOptions?.getBoolean("suffix") != false)
+            optionCommands.add(CommandAPICommand("suffix")
+                .withRequirement(::isTeamOwner)
+                .withArguments(TextArgument("value"))
+            )
+
+        CommandAPICommand("uteams")
+            .withAliases("uteam", "userteam", "userteams")
+            .withSubcommands(
+                CommandAPICommand("create")
+                    //.withRequirements() no estar en otro team
+                    .withArguments(StringArgument("codename"))
+                    .withRequirement{ !isInTeam(it) }
+                    .executesPlayer(PlayerCommandExecutor { player, args ->
+
+                    }),
+                CommandAPICommand("disband")
+                    .withAliases("disolve")
+                    .withRequirement(::isTeamOwner)
+                    .executesPlayer(PlayerCommandExecutor { player, args ->
+
+                    }),
+                CommandAPICommand("invite")
+                    .withRequirement(::isTeamOwner)
+                    .withArguments(PlayerArgument("player"))
+                    .executesPlayer(PlayerCommandExecutor { player, args ->
+
+                    }),
+                CommandAPICommand("kick")
+                    .withRequirement(::isTeamOwner)
+                    .withArguments(PlayerArgument("player"))
+                    .executesPlayer(PlayerCommandExecutor { player, args ->
+
+                    }),
+                CommandAPICommand("leave")
+                    .withRequirement(::isInTeam)
+                    .executesPlayer(PlayerCommandExecutor { player, args ->
+
+                    }),
+                CommandAPICommand("option")
+                    .withRequirement(::isTeamOwner)
+                    .withAliases("modify", "customize", "configure")
+                    .withSubcommands(*optionCommands.toTypedArray()),
+                CommandAPICommand("list")
+                    .executes(CommandExecutor { sender, args ->
+
+                    })
+            )
+            .register()
     }
 
     override fun onEnable() {
@@ -20,5 +127,13 @@ class UserTeams : JavaPlugin() {
     override fun onDisable() {
         // Plugin shutdown logic
         CommandAPI.onDisable()
+    }
+
+    private fun isTeamOwner(sender: CommandSender): Boolean {
+        TODO("Not yet implemented")
+    }
+
+    private fun isInTeam(sender: CommandSender): Boolean {
+        TODO("Not yet implemented")
     }
 }
