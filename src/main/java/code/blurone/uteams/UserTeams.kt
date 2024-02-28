@@ -99,7 +99,7 @@ class UserTeams : JavaPlugin() {
             )
 
         CommandAPICommand("uteams")
-            .withAliases("uteam", "userteam", "userteams")
+            .withAliases("uteam")
             .withSubcommands(
                 CommandAPICommand("create") // /uteams create <codename> [displayName]
                     .withRequirement{ !isInTeam(it) }
