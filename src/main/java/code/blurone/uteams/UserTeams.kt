@@ -262,7 +262,7 @@ class UserTeams : JavaPlugin() {
         sender.persistentDataContainer.set(confirmationNamespacedKey, PersistentDataType.STRING, "kick")
         CommandAPI.updateRequirements(sender)
         sender.spigot().sendMessage(
-            *ComponentBuilder(getTranslation("kick_initiation", sender.locale))
+            *ComponentBuilder(getTranslation("kick_initiation", sender.locale).replace("%s", playerName))
                 .append("\n[").color(ChatColor.GRAY)
                 .append(getTranslation("yes", sender.locale)).color(ChatColor.GREEN).bold(true)
                 .event(ClickEvent(ClickEvent.Action.RUN_COMMAND, "/uteams kick $playerName confirm"))
