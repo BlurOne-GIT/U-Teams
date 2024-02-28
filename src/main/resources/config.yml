@@ -1,3 +1,6 @@
+# Enabling this feature enables you to send invites, kick, transfer ownership and request invites to offline players.
+offline_functions: false
+
 # What aspects of a team can be modified by a team owner.
 # For more info see https://minecraft.wiki/w/Commands/team
 modifiable_team_options:

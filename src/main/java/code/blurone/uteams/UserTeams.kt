@@ -12,6 +12,7 @@ import net.md_5.bungee.api.chat.BaseComponent
 import net.md_5.bungee.api.chat.ClickEvent
 import net.md_5.bungee.api.chat.ComponentBuilder
 import org.bukkit.NamespacedKey
+import org.bukkit.OfflinePlayer
 import org.bukkit.command.CommandSender
 import org.bukkit.configuration.file.YamlConfiguration
 import org.bukkit.entity.Player
@@ -21,6 +22,7 @@ import java.io.File
 
 class UserTeams : JavaPlugin() {
     private val scoreboard get() = server.scoreboardManager?.mainScoreboard ?: throw NullPointerException("Main scoreboard not found")
+    private val offlineFunctions = config.getBoolean("offline_functions", false)
     private val confirmationNamespacedKey = NamespacedKey(this, "confirmation")
 
     override fun onLoad() {
@@ -110,15 +112,16 @@ class UserTeams : JavaPlugin() {
                 CommandAPICommand("invite")
                     .withRequirement(::isTeamOwner)
                     .withArguments(PlayerArgument("player"))
+                    .withArguments(if (offlineFunctions) OfflinePlayerArgument("player") else PlayerArgument("player"))
                     .executesPlayer(PlayerCommandExecutor { player, args ->
 
                     }),
                 CommandAPICommand("kick")
                     .withRequirement(::isTeamOwner)
-                    .withArguments(PlayerArgument("player"))
                     .executesPlayer(PlayerCommandExecutor { player, args ->
 
                     }),
+                    .withArguments(if (offlineFunctions) OfflinePlayerArgument("player") else PlayerArgument("player"))
                 CommandAPICommand("leave")
                     .withRequirement(::isInTeam)
                     .executesPlayer(PlayerCommandExecutor { player, args ->
