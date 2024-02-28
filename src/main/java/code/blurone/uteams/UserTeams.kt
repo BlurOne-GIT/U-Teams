@@ -121,13 +121,13 @@ class UserTeams : JavaPlugin() {
                     ),
                 CommandAPICommand("invite")
                     .withRequirement(::isTeamOwner)
-                    .withArguments(if (offlineFunctions) OfflinePlayerArgument("player") else PlayerArgument("player"))
+                    .withArguments(if (offlineFunctions) OfflinePlayerArgument("player") else EntitySelectorArgument.OnePlayer("player"))
                     .executesPlayer(PlayerCommandExecutor { player, args ->
 
                     }),
                 CommandAPICommand("kick")
                     .withRequirement(::isTeamOwner)
-                    .withArguments(if (offlineFunctions) OfflinePlayerArgument("player") else PlayerArgument("player"))
+                    .withArguments(if (offlineFunctions) OfflinePlayerArgument("player") else EntitySelectorArgument.OnePlayer("player"))
                     .executesPlayer(PlayerCommandExecutor(::kickPlayerInitiation))
                     .withSubcommands(
                         CommandAPICommand("confirm")
