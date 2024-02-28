@@ -244,10 +244,11 @@ class UserTeams : JavaPlugin() {
     private fun disbandConfirm(sender: Player, args: CommandArguments) {
         sender.persistentDataContainer.remove(confirmationNamespacedKey)
         val team = scoreboard.getEntryTeam(sender.name)
+        val members = team?.entries
         team?.unregister()
         scoreboard.getEntryTeam("+${sender.name}")?.unregister()
         CommandAPI.updateRequirements(sender)
-        team?.entries?.forEach {
+        members?.forEach {
             val player = server.getPlayerExact(it)
             player?.sendMessage(getTranslation("team_disbanded", player.locale))
         }
