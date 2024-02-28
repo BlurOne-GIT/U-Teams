@@ -23,7 +23,6 @@ import java.io.File
 
 class UserTeams : JavaPlugin() {
     private val scoreboard get() = server.scoreboardManager?.mainScoreboard ?: throw NullPointerException("Main scoreboard not found")
-    private val offlineFunctions = config.getBoolean("offline_functions", false)
     private val confirmationNamespacedKey = NamespacedKey(this, "confirmation")
 
     override fun onLoad() {
@@ -121,13 +120,17 @@ class UserTeams : JavaPlugin() {
                     ),
                 CommandAPICommand("invite")
                     .withRequirement(::isTeamOwner)
-                    .withArguments(if (offlineFunctions) OfflinePlayerArgument("player") else EntitySelectorArgument.OnePlayer("player"))
+                    .withArguments(OfflinePlayerArgument("player")
+                        .replaceSafeSuggestions(SafeSuggestions.suggest(::teamlessFilter))
+                    )
                     .executesPlayer(PlayerCommandExecutor { player, args ->
 
                     }),
                 CommandAPICommand("kick")
                     .withRequirement(::isTeamOwner)
-                    .withArguments(if (offlineFunctions) OfflinePlayerArgument("player") else EntitySelectorArgument.OnePlayer("player"))
+                    .withArguments(OfflinePlayerArgument("player")
+                        .replaceSafeSuggestions(SafeSuggestions.suggest(::teammatesFilter))
+                    )
                     .executesPlayer(PlayerCommandExecutor(::kickPlayerInitiation))
                     .withSubcommands(
                         CommandAPICommand("confirm")
@@ -197,6 +200,15 @@ class UserTeams : JavaPlugin() {
         return scoreboard.getEntryTeam(sender.name) != null
     }
 
+    private fun teammatesFilter(info: SuggestionInfo<CommandSender>): Array<OfflinePlayer> {
+        val team = scoreboard.getEntryTeam(info.sender.name)
+        return server.offlinePlayers.filter { scoreboard.getEntryTeam(it.name!!) == team && it.name != info.sender.name }.toTypedArray()
+    }
+
+    private fun teamlessFilter(info: SuggestionInfo<CommandSender>): Array<OfflinePlayer> {
+        return server.offlinePlayers.filter { scoreboard.getEntryTeam(it.name!!) == null }.toTypedArray()
+    }
+
     private fun isInConfirmation(sender: CommandSender, action: String): Boolean {
         return sender is Player && sender.persistentDataContainer.get(confirmationNamespacedKey, PersistentDataType.STRING) == action
     }
@@ -256,11 +268,6 @@ class UserTeams : JavaPlugin() {
 
     private fun kickPlayerInitiation(sender: Player, args: CommandArguments) {
         val playerName = (args["player"] as OfflinePlayer).name!!
-        if (scoreboard.getEntryTeam(sender.name) != scoreboard.getEntryTeam(playerName))
-            return sender.sendMessage(getTranslation("player_not_in_team", sender.locale))
-        else if (playerName == sender.name)
-            return sender.sendMessage(getTranslation("owner_cant_leave", sender.locale))
-
         sender.persistentDataContainer.set(confirmationNamespacedKey, PersistentDataType.STRING, "kick")
         CommandAPI.updateRequirements(sender)
         sender.spigot().sendMessage(
