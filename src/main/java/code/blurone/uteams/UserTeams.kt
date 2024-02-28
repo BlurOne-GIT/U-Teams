@@ -258,6 +258,8 @@ class UserTeams : JavaPlugin() {
         val playerName = (args["player"] as OfflinePlayer).name!!
         if (scoreboard.getEntryTeam(sender.name) != scoreboard.getEntryTeam(playerName))
             return sender.sendMessage(getTranslation("player_not_in_team", sender.locale))
+        else if (playerName == sender.name)
+            return sender.sendMessage(getTranslation("owner_cant_leave", sender.locale))
 
         sender.persistentDataContainer.set(confirmationNamespacedKey, PersistentDataType.STRING, "kick")
         CommandAPI.updateRequirements(sender)
