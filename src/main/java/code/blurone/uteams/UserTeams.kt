@@ -193,7 +193,7 @@ class UserTeams : JavaPlugin() {
     }
 
     private fun isTeamOwner(sender: CommandSender): Boolean {
-        return scoreboard.getEntryTeam("+${sender.name}") != null
+        return scoreboard.getEntryTeam("${sender.name}+owner") != null
     }
 
     private fun isInTeam(sender: CommandSender): Boolean {
@@ -232,7 +232,7 @@ class UserTeams : JavaPlugin() {
                 }
             }
         }
-        scoreboard.registerNewTeam("$codename+owner").addEntry("+${sender.name}")
+        scoreboard.registerNewTeam("$codename+owner").addEntry("${sender.name}+owner")
         CommandAPI.updateRequirements(sender)
         sender.sendMessage(getTranslation("team_created", sender.locale))
     }
@@ -258,7 +258,7 @@ class UserTeams : JavaPlugin() {
         val team = scoreboard.getEntryTeam(sender.name)
         val members = team?.entries
         team?.unregister()
-        scoreboard.getEntryTeam("+${sender.name}")?.unregister()
+        scoreboard.getEntryTeam("${sender.name}+owner")?.unregister()
         CommandAPI.updateRequirements(sender)
         members?.forEach {
             val player = server.getPlayerExact(it)
