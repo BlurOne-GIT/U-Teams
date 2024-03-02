@@ -1,15 +1,31 @@
+# This file is automatically overwritten when the plugin is loaded. Editing it has no effect.
+# To modify translations, copy the file for the desired language (e.g. "en.yml") or locale (e.g. "en_us.yml").
+# %s is a placeholder.
 yes: "Yes"
 no: "No"
+accept: "Accept"
+decline: "Decline"
+members: "%s Members" # %s is number of members
+teams: "%s Teams:" # %s is number of teams
 action_cancelled: "Action cancelled."
 team_created: "Your team has been created successfully."
 team_same_name: "A team with the same name already exists."
 disband_initiation: "Are you sure you want to disband the team?"
 team_disbanded: "Your team has been disbanded."
-kick_initiation: "Are you sure you want to kick %s from the team?"
-player_kicked: "%s has been kicked from the team."
+kick_initiation: "Are you sure you want to kick %s from the team?" # %s is player name
+player_kicked: "%s has been kicked from the team." # %s is player name
 you_kicked: "You have been kicked from the team."
 player_not_in_team: "The player is not your the team."
 leave_initiation: "Are you sure you want to leave the team?"
 player_left: "%s has left the team."
 you_left: "You have left the team."
 owner_cant_leave: "The owner can't leave the team."
+transfer_initiation: "Are you sure you want to transfer ownership of the team to %s?" # %s is player name
+ownership_transferred: "Ownership of the team has been transferred to %s." # %s is player name
+invite_sent: "Invite sent."
+invite_received: "You have been invited to join %s." # %s is team name
+invite_accepted: "You have joined %s." # %s is team name
+invite_declined: "Invite declined."
+player_declined: "%s has declined the invite." # %s is player name
+player_joined: "%s has joined the team." # %s is player name
+no_teams: "There are no teams."

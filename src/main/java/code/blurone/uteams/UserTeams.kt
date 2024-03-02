@@ -6,24 +6,38 @@ import dev.jorel.commandapi.CommandAPICommand
 import dev.jorel.commandapi.SuggestionInfo
 import dev.jorel.commandapi.arguments.*
 import dev.jorel.commandapi.executors.CommandArguments
-import dev.jorel.commandapi.executors.CommandExecutor
 import dev.jorel.commandapi.executors.PlayerCommandExecutor
 import net.md_5.bungee.api.ChatColor
-import net.md_5.bungee.api.chat.BaseComponent
-import net.md_5.bungee.api.chat.ClickEvent
-import net.md_5.bungee.api.chat.ComponentBuilder
+import net.md_5.bungee.api.chat.*
+import net.md_5.bungee.api.chat.hover.content.Text
 import org.bukkit.NamespacedKey
 import org.bukkit.OfflinePlayer
 import org.bukkit.command.CommandSender
 import org.bukkit.configuration.file.YamlConfiguration
 import org.bukkit.entity.Player
+import org.bukkit.event.EventHandler
+import org.bukkit.event.Listener
+import org.bukkit.event.player.PlayerJoinEvent
+import org.bukkit.event.world.WorldSaveEvent
 import org.bukkit.persistence.PersistentDataType
 import org.bukkit.plugin.java.JavaPlugin
+import org.bukkit.scoreboard.Scoreboard
 import org.bukkit.scoreboard.Team
+import org.bukkit.util.io.BukkitObjectInputStream
+import org.bukkit.util.io.BukkitObjectOutputStream
 import java.io.File
+import java.io.FileInputStream
+import java.io.FileOutputStream
+import java.util.zip.GZIPInputStream
+import java.util.zip.GZIPOutputStream
 
-class UserTeams : JavaPlugin() {
-    private val scoreboard get() = server.scoreboardManager?.mainScoreboard ?: throw NullPointerException("Main scoreboard not found")
+// I'm not proud of this code. It looks horrible.
+// Copilot opted to add: "I'm sorry. I'll refactor it later. I promise. I'm sorry."
+
+class UserTeams : JavaPlugin(), Listener {
+    private val mainScoreboard get() = server.scoreboardManager?.mainScoreboard ?: throw NullPointerException("Main scoreboard not found")
+    private val ownerScoreboard = loadScoreboard("ownerScoreboard.dat")
+    private val invitationScoreboard = loadScoreboard("invitationScoreboard.dat")
     private val confirmationNamespacedKey = NamespacedKey(this, "confirmation")
 
     override fun onLoad() {
@@ -124,9 +138,16 @@ class UserTeams : JavaPlugin() {
                     .withArguments(OfflinePlayerArgument("player")
                         .replaceSafeSuggestions(SafeSuggestions.suggest(::teamlessFilter))
                     )
-                    .executesPlayer(PlayerCommandExecutor { player, args ->
-
-                    }),
+                    .executesPlayer(PlayerCommandExecutor(::invitePlayer)),
+                CommandAPICommand("invite")
+                    .withRequirement(::hasInvites)
+                    .withArguments(TeamArgument("team").replaceSafeSuggestions(SafeSuggestions.suggest(::invitedTeamsFilter)))
+                    .withSubcommands(
+                        CommandAPICommand("accept")
+                            .executesPlayer(PlayerCommandExecutor(::acceptInvite)),
+                        CommandAPICommand("decline")
+                            .executesPlayer(PlayerCommandExecutor(::declineInvite))
+                    ),
                 CommandAPICommand("kick")
                     .withRequirement(::isTeamOwner)
                     .withArguments(OfflinePlayerArgument("player")
@@ -158,9 +179,21 @@ class UserTeams : JavaPlugin() {
                     .withAliases("modify", "customize", "configure")
                     .withSubcommands(*optionCommands.toTypedArray()),
                 CommandAPICommand("list")
-                    .executes(CommandExecutor { sender, args ->
-
-                    })
+                    .executesPlayer(PlayerCommandExecutor(::listTeams)),
+                CommandAPICommand("transfer")
+                    .withRequirement(::isTeamOwner)
+                    .withArguments(OfflinePlayerArgument("player")
+                        .replaceSafeSuggestions(SafeSuggestions.suggest(::teammatesFilter))
+                    )
+                    .executesPlayer(PlayerCommandExecutor(::transferOwnershipInitialize))
+                    .withSubcommands(
+                        CommandAPICommand("confirm")
+                            .withRequirement { isInConfirmation(it, "transfer") }
+                            .executesPlayer(PlayerCommandExecutor(::transferOwnershipConfirm)),
+                        CommandAPICommand("cancel")
+                            .withRequirement { isInConfirmation(it, "transfer") }
+                            .executesPlayer(PlayerCommandExecutor(::cancelConfirmation))
+                    )
             )
             .register()
     }
@@ -186,28 +219,72 @@ class UserTeams : JavaPlugin() {
                 continue
             }
         }
+        server.pluginManager.registerEvents(this, this)
     }
 
     override fun onDisable() {
         // Plugin shutdown logic
+        saveScoreboards()
         CommandAPI.onDisable()
     }
 
+    @EventHandler
+    private fun onWorldSave(event: WorldSaveEvent) {
+        saveScoreboards()
+    }
+
+    private fun saveScoreboards() {
+        try {
+            val ownerStream = BukkitObjectOutputStream(GZIPOutputStream(FileOutputStream(dataFolder.resolve("ownerScoreboard.dat"))))
+            ownerStream.writeObject(ownerScoreboard)
+            ownerStream.close()
+            val invitationStream = BukkitObjectOutputStream(GZIPOutputStream(FileOutputStream(dataFolder.resolve("invitationScoreboard.dat"))))
+            invitationStream.writeObject(invitationScoreboard)
+            invitationStream.close()
+        } catch (e: Exception) {
+            logger.warning(e.stackTraceToString())
+        }
+    }
+
+    private fun loadScoreboard(file: String): Scoreboard {
+        try {
+            val stream = BukkitObjectInputStream(GZIPInputStream(FileInputStream(dataFolder.resolve(file))))
+            val scoreboard = stream.readObject() as Scoreboard
+            stream.close()
+            return scoreboard
+        } catch (e: Exception) {
+            logger.warning(e.stackTraceToString())
+            return server.scoreboardManager?.newScoreboard!!
+        }
+    }
+
     private fun isTeamOwner(sender: CommandSender): Boolean {
-        return scoreboard.getEntryTeam("${sender.name}+owner") != null
+        return ownerScoreboard.getEntryTeam(sender.name) != null
     }
 
     private fun isInTeam(sender: CommandSender): Boolean {
-        return scoreboard.getEntryTeam(sender.name) != null
+        return mainScoreboard.getEntryTeam(sender.name) != null
+    }
+
+    private fun hasInvites(sender: CommandSender): Boolean {
+        return invitationScoreboard.entries.any { it.startsWith(sender.name) }
     }
 
     private fun teammatesFilter(info: SuggestionInfo<CommandSender>): Array<OfflinePlayer> {
-        val team = scoreboard.getEntryTeam(info.sender.name)
-        return server.offlinePlayers.filter { scoreboard.getEntryTeam(it.name!!) == team && it.name != info.sender.name }.toTypedArray()
+        val team = mainScoreboard.getEntryTeam(info.sender.name)
+        return server.offlinePlayers.filter { mainScoreboard.getEntryTeam(it.name!!) == team && it.name != info.sender.name }.toTypedArray()
     }
 
     private fun teamlessFilter(info: SuggestionInfo<CommandSender>): Array<OfflinePlayer> {
-        return server.offlinePlayers.filter { scoreboard.getEntryTeam(it.name!!) == null }.toTypedArray()
+        return server.offlinePlayers.filter { mainScoreboard.getEntryTeam(it.name!!) == null }.toTypedArray()
+    }
+
+    private fun invitedTeamsFilter(info: SuggestionInfo<CommandSender>): Array<Team> {
+        return invitedTeamsFilter(info.sender.name)
+    }
+
+    private fun invitedTeamsFilter(playerName: String): Array<Team> {
+        return invitationScoreboard.teams.filter { it.entries.any { jt -> jt.startsWith(playerName) } }.map { mainScoreboard.getTeam(it.name)!! }.toTypedArray()
     }
 
     private fun isInConfirmation(sender: CommandSender, action: String): Boolean {
@@ -222,10 +299,10 @@ class UserTeams : JavaPlugin() {
 
     private fun createTeam(sender: Player, args: CommandArguments) {
         val codename = args["codename"] as String
-        if (scoreboard.getTeam(codename) != null)
+        if (mainScoreboard.getTeam(codename) != null)
             return sender.sendMessage(getTranslation("team_same_name", sender.locale))
 
-        scoreboard.registerNewTeam(codename).let {
+        mainScoreboard.registerNewTeam(codename).let {
             it.addEntry(sender.name)
             args["displayName"]?.let { displayComponents ->
                 it.displayName = (displayComponents as Array<*>).joinToString("") {
@@ -233,7 +310,8 @@ class UserTeams : JavaPlugin() {
                 }
             }
         }
-        scoreboard.registerNewTeam("$codename+owner").addEntry("${sender.name}+owner")
+        ownerScoreboard.registerNewTeam(codename).addEntry(sender.name)
+        invitationScoreboard.registerNewTeam(codename)
         CommandAPI.updateRequirements(sender)
         sender.sendMessage(getTranslation("team_created", sender.locale))
     }
@@ -256,12 +334,14 @@ class UserTeams : JavaPlugin() {
 
     private fun disbandConfirm(sender: Player, args: CommandArguments) {
         sender.persistentDataContainer.remove(confirmationNamespacedKey)
-        val team = scoreboard.getEntryTeam(sender.name)
-        val members = team?.entries
-        team?.unregister()
-        scoreboard.getEntryTeam("${sender.name}+owner")?.unregister()
+        val team = mainScoreboard.getEntryTeam(sender.name)!!
+        val teamName = team.name
+        val members = team.entries
+        team.unregister()
+        ownerScoreboard.getTeam(teamName)?.unregister()
+        invitationScoreboard.getTeam(teamName)?.unregister()
         CommandAPI.updateRequirements(sender)
-        members?.forEach {
+        members.forEach {
             val player = server.getPlayerExact(it)
             player?.sendMessage(getTranslation("team_disbanded", player.locale))
         }
@@ -287,7 +367,7 @@ class UserTeams : JavaPlugin() {
     private fun kickPlayerConfirm(sender: Player, args: CommandArguments) {
         val offPlayer = args["player"] as OfflinePlayer
         val playerName = offPlayer.name!!
-        val team = scoreboard.getEntryTeam(playerName)
+        val team = mainScoreboard.getEntryTeam(playerName)
         team?.removeEntry(playerName)
         offPlayer.player?.sendMessage(getTranslation("you_kicked", offPlayer.player!!.locale))
         server.getPlayerExact(playerName)?.sendMessage(getTranslation("kicked", server.getPlayerExact(playerName)!!.locale))
@@ -316,7 +396,7 @@ class UserTeams : JavaPlugin() {
     }
 
     private fun leaveTeamConfirm(sender: Player, args: CommandArguments) {
-        val team = scoreboard.getEntryTeam(sender.name)
+        val team = mainScoreboard.getEntryTeam(sender.name)
         team?.removeEntry(sender.name)
         team?.entries?.forEach {
             val player = server.getPlayerExact(it)
@@ -327,46 +407,174 @@ class UserTeams : JavaPlugin() {
         CommandAPI.updateRequirements(sender)
     }
 
+    private fun transferOwnershipInitialize(sender: Player, args: CommandArguments) {
+        val playerName = (args["player"] as OfflinePlayer).name!!
+        sender.persistentDataContainer.set(confirmationNamespacedKey, PersistentDataType.STRING, "transfer")
+        CommandAPI.updateRequirements(sender)
+        sender.spigot().sendMessage(
+            *ComponentBuilder(getTranslation("transfer_initiation", sender.locale).replace("%s", playerName))
+                .append("\n[").color(ChatColor.GRAY)
+                .append(getTranslation("yes", sender.locale)).color(ChatColor.GREEN).bold(true)
+                .event(ClickEvent(ClickEvent.Action.RUN_COMMAND, "/uteams transfer $playerName confirm"))
+                .append("/").color(ChatColor.GRAY).bold(false)
+                .append(getTranslation("no", sender.locale)).color(ChatColor.RED).bold(true)
+                .event(ClickEvent(ClickEvent.Action.RUN_COMMAND, "/uteams transfer $playerName cancel"))
+                .append("]").color(ChatColor.GRAY).bold(false)
+                .create()
+        )
+    }
+
+    private fun transferOwnershipConfirm(sender: Player, args: CommandArguments) {
+        val recipient = args["player"] as OfflinePlayer
+        val ownerTeam = invitationScoreboard.getEntryTeam(sender.name)
+        ownerTeam?.removeEntry(sender.name)
+        ownerTeam?.addEntry(recipient.name!!)
+        sender.persistentDataContainer.remove(confirmationNamespacedKey)
+        CommandAPI.updateRequirements(sender)
+        recipient.player?.let {
+            CommandAPI.updateRequirements(it)
+        }
+        mainScoreboard.getEntryTeam(sender.name)?.entries?.forEach {
+            val player = server.getPlayerExact(it)
+            player?.sendMessage(getTranslation("ownership_transferred", player.locale).replace("%s", player.name))
+        }
+    }
+
     private fun optionDisplayName(sender: Player, args: CommandArguments) {
-        scoreboard.getEntryTeam(sender.name)?.displayName = (args["value"] as Array<*>).joinToString("") {
+        mainScoreboard.getEntryTeam(sender.name)?.displayName = (args["value"] as Array<*>).joinToString("") {
             component -> (component as BaseComponent).toLegacyText()
         }
     }
 
     private fun optionColor(sender: Player, args: CommandArguments) {
-        scoreboard.getEntryTeam(sender.name)?.color = (args["value"] as org.bukkit.ChatColor)
+        mainScoreboard.getEntryTeam(sender.name)?.color = (args["value"] as org.bukkit.ChatColor)
     }
 
     private fun optionFriendlyFire(sender: Player, args: CommandArguments) {
-        scoreboard.getEntryTeam(sender.name)?.setAllowFriendlyFire(args["value"] as Boolean)
+        mainScoreboard.getEntryTeam(sender.name)?.setAllowFriendlyFire(args["value"] as Boolean)
     }
 
     private fun optionSeeFriendlyInvisibles(sender: Player, args: CommandArguments) {
-        scoreboard.getEntryTeam(sender.name)?.setCanSeeFriendlyInvisibles(args["value"] as Boolean)
+        mainScoreboard.getEntryTeam(sender.name)?.setCanSeeFriendlyInvisibles(args["value"] as Boolean)
     }
 
     private fun optionNametagVisibility(sender: Player, args: CommandArguments) {
-        scoreboard.getEntryTeam(sender.name)?.setOption(Team.Option.NAME_TAG_VISIBILITY, if ((args["value"] as String) == "always") Team.OptionStatus.ALWAYS else Team.OptionStatus.FOR_OTHER_TEAMS)
+        mainScoreboard.getEntryTeam(sender.name)?.setOption(Team.Option.NAME_TAG_VISIBILITY, if ((args["value"] as String) == "always") Team.OptionStatus.ALWAYS else Team.OptionStatus.FOR_OTHER_TEAMS)
     }
 
     private fun optionDeathMessageVisibility(sender: Player, args: CommandArguments) {
-        scoreboard.getEntryTeam(sender.name)?.setOption(Team.Option.DEATH_MESSAGE_VISIBILITY, if ((args["value"] as String) == "always") Team.OptionStatus.ALWAYS else Team.OptionStatus.FOR_OTHER_TEAMS)
+        mainScoreboard.getEntryTeam(sender.name)?.setOption(Team.Option.DEATH_MESSAGE_VISIBILITY, if ((args["value"] as String) == "always") Team.OptionStatus.ALWAYS else Team.OptionStatus.FOR_OTHER_TEAMS)
     }
 
     private fun optionCollisionRule(sender: Player, args: CommandArguments) {
-        scoreboard.getEntryTeam(sender.name)?.setOption(Team.Option.COLLISION_RULE, if ((args["value"] as String) == "always") Team.OptionStatus.ALWAYS else Team.OptionStatus.FOR_OTHER_TEAMS)
+        mainScoreboard.getEntryTeam(sender.name)?.setOption(Team.Option.COLLISION_RULE, if ((args["value"] as String) == "always") Team.OptionStatus.ALWAYS else Team.OptionStatus.FOR_OTHER_TEAMS)
     }
 
     private fun optionPrefix(sender: Player, args: CommandArguments) {
-        scoreboard.getEntryTeam(sender.name)?.prefix = (args["value"] as Array<*>).joinToString("") {
+        mainScoreboard.getEntryTeam(sender.name)?.prefix = (args["value"] as Array<*>).joinToString("") {
             component -> (component as BaseComponent).toLegacyText()
         }
     }
 
     private fun optionSuffix(sender: Player, args: CommandArguments) {
-        scoreboard.getEntryTeam(sender.name)?.suffix = (args["value"] as Array<*>).joinToString("") {
+        mainScoreboard.getEntryTeam(sender.name)?.suffix = (args["value"] as Array<*>).joinToString("") {
             component -> (component as BaseComponent).toLegacyText()
         }
+    }
+
+    private fun invitePlayer(sender: Player, args: CommandArguments) {
+        val player = args["player"] as OfflinePlayer
+        val team = mainScoreboard.getEntryTeam(sender.name)!!
+        val teamName = team.name
+        invitationScoreboard.getTeam(teamName)?.addEntry("${player.name}+$teamName")
+        player.player?.let { sendInvite(it, team) }
+    }
+
+    @EventHandler
+    private fun onPlayerJoin(event: PlayerJoinEvent) {
+        invitedTeamsFilter(event.player.name).forEach { sendInvite(event.player, it) }
+
+        CommandAPI.updateRequirements(event.player)
+    }
+
+    private fun sendInvite(player: Player, team: Team) {
+        val translation = getTranslation("invite_received", player.locale).split("%s")
+        try {
+            player.spigot().sendMessage(
+                *ComponentBuilder(translation[0])
+                    .append(team.displayName).color(team.color.asBungee())
+                    .append(translation.getOrNull(1) ?: "").color(ChatColor.WHITE)
+                    .append("\n[").color(ChatColor.GRAY)
+                    .append(getTranslation("accept", player.locale)).color(ChatColor.GREEN).bold(true)
+                    .event(ClickEvent(ClickEvent.Action.RUN_COMMAND, "/uteams invite ${team.name} accept"))
+                    .append("/").color(ChatColor.GRAY).bold(false)
+                    .append(getTranslation("decline", player.locale)).color(ChatColor.RED).bold(true)
+                    .event(ClickEvent(ClickEvent.Action.RUN_COMMAND, "/uteams invite ${team.name} decline"))
+                    .append("]").color(ChatColor.GRAY).bold(false)
+                    .create()
+            )
+        } catch (e: Exception) {
+            logger.warning(e.stackTraceToString())
+            player.sendMessage(getTranslation("invite_received", player.locale).replace("%s", team.displayName) + "\n" +
+                    getTranslation("accept", player.locale) + " /uteams invite ${team.name} accept\n" +
+                    getTranslation("decline", player.locale) + " /uteams invite ${team.name} decline")
+        }
+    }
+
+    private fun acceptInvite(sender: Player, args: CommandArguments) {
+        val team = args["team"] as Team
+        val members = team.entries
+        team.addEntry(sender.name)
+        invitedTeamsFilter(sender.name).forEach { invitationScoreboard.getTeam(it.name)!!.removeEntry("${sender.name}+${it.name}") }
+        CommandAPI.updateRequirements(sender)
+        sender.spigot().sendMessage(
+            *ComponentBuilder(getTranslation("invite_accepted", sender.locale).replace("%s", team.displayName))
+                .color(team.color.asBungee())
+                .create()
+        )
+        members.forEach {
+            val player = server.getPlayerExact(it)
+            player?.sendMessage(getTranslation("player_joined", player.locale).replace("%s", sender.name))
+        }
+    }
+
+    private fun declineInvite(sender: Player, args: CommandArguments) {
+        val team = args["team"] as Team
+        val lookingFor = "${sender.name}:${team.name}"
+        invitationScoreboard.getEntryTeam(lookingFor)?.removeEntry(lookingFor)
+        CommandAPI.updateRequirements(sender)
+        sender.sendMessage(getTranslation("invite_declined", sender.locale))
+        team.entries.forEach {
+            val player = server.getPlayerExact(it)
+            player?.sendMessage(getTranslation("player_declined", player.locale).replace("%s", sender.name))
+        }
+    }
+
+    private fun listTeams(sender: Player, args: CommandArguments) {
+        val teams = ownerScoreboard.teams.map { mainScoreboard.getTeam(it.name)!! }
+        if (teams.isEmpty())
+            return sender.sendMessage(getTranslation("no_teams", sender.locale))
+        val builder = ComponentBuilder(getTranslation("teams", sender.locale).replace("%s", teams.size.toString()))
+        teams.forEach {
+            val owner = mainScoreboard.getTeam("${it.name}:owner")!!.entries.first().removeSuffix(":owner")
+            val membersComponent = ComponentBuilder(owner).bold(true).append("").bold(false)
+            it.entries.forEach { entry ->
+                if (entry != owner)
+                    membersComponent.append("\n").append(entry)
+            }
+            /*
+            val memberList = it.entries.filterNot { entry -> entry == owner }.map { entry -> Text(entry) }.toMutableList()
+            memberList.add(0, Text(ComponentBuilder(owner).bold(true).create()))
+            */
+
+            builder
+                .append(it.displayName).color(it.color.asBungee())
+                .event(HoverEvent(HoverEvent.Action.SHOW_TEXT, Text(it.name)))
+                .append(" - ").color(ChatColor.GRAY)
+                .append(getTranslation("members", sender.locale).replace("%s", it.entries.size.toString())).color(ChatColor.WHITE)
+                //.event(HoverEvent(HoverEvent.Action.SHOW_TEXT, Text(membersComponent.create())))
+        }
+        sender.spigot().sendMessage(*builder.create())
     }
 
     companion object {
