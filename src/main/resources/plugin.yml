@@ -2,7 +2,7 @@ name: U-Teams
 version: '${project.version}'
 main: code.blurone.uteams.UserTeams
 api-version: '1.20'
-load: STARTUP
+load: POSTWORLD
 #depend: [CommandAPI]
 authors: [BlurOne!]
 description: A Minecraft plugin that allows users to create and handle teams without the need for op.

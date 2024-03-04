@@ -1,5 +1,6 @@
-# Enabling this feature enables you to send invites, kick, transfer ownership and request invites to offline players.
-offline_functions: false
+# If true, the /team command will be overridden with the functionality of this plugin.
+# To use the vanilla /team command, you'll have to use /minecraft:team.
+override_team_command: false
 
 # What aspects of a team can be modified by a team owner.
 # For more info see https://minecraft.wiki/w/Commands/team

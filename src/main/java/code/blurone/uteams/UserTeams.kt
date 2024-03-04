@@ -8,36 +8,35 @@ import dev.jorel.commandapi.arguments.*
 import dev.jorel.commandapi.executors.CommandArguments
 import dev.jorel.commandapi.executors.PlayerCommandExecutor
 import net.md_5.bungee.api.ChatColor
-import net.md_5.bungee.api.chat.*
+import net.md_5.bungee.api.chat.BaseComponent
+import net.md_5.bungee.api.chat.ClickEvent
+import net.md_5.bungee.api.chat.ComponentBuilder
+import net.md_5.bungee.api.chat.HoverEvent
 import net.md_5.bungee.api.chat.hover.content.Text
+import net.minecraft.server.ServerScoreboard
 import org.bukkit.NamespacedKey
 import org.bukkit.OfflinePlayer
 import org.bukkit.command.CommandSender
 import org.bukkit.configuration.file.YamlConfiguration
+import org.bukkit.craftbukkit.v1_20_R3.CraftWorld
+import org.bukkit.craftbukkit.v1_20_R3.scoreboard.CraftScoreboard
 import org.bukkit.entity.Player
 import org.bukkit.event.EventHandler
 import org.bukkit.event.Listener
 import org.bukkit.event.player.PlayerJoinEvent
-import org.bukkit.event.world.WorldSaveEvent
 import org.bukkit.persistence.PersistentDataType
 import org.bukkit.plugin.java.JavaPlugin
 import org.bukkit.scoreboard.Scoreboard
 import org.bukkit.scoreboard.Team
-import org.bukkit.util.io.BukkitObjectInputStream
-import org.bukkit.util.io.BukkitObjectOutputStream
 import java.io.File
-import java.io.FileInputStream
-import java.io.FileOutputStream
-import java.util.zip.GZIPInputStream
-import java.util.zip.GZIPOutputStream
 
 // I'm not proud of this code. It looks horrible.
 // Copilot opted to add: "I'm sorry. I'll refactor it later. I promise. I'm sorry."
 
 class UserTeams : JavaPlugin(), Listener {
     private val mainScoreboard get() = server.scoreboardManager?.mainScoreboard ?: throw NullPointerException("Main scoreboard not found")
-    private val ownerScoreboard = loadScoreboard("ownerScoreboard.dat")
-    private val invitationScoreboard = loadScoreboard("invitationScoreboard.dat")
+    private lateinit var ownerScoreboard: Scoreboard
+    private lateinit var invitationScoreboard: Scoreboard
     private val confirmationNamespacedKey = NamespacedKey(this, "confirmation")
 
     override fun onLoad() {
@@ -48,7 +47,7 @@ class UserTeams : JavaPlugin(), Listener {
 
         val optionsOptions = config.getConfigurationSection("modifiable_team_options")
 
-        val optionCommands = mutableListOf<CommandAPICommand>() // /uteams option <subcommands> <value>
+        val optionCommands = mutableListOf<CommandAPICommand>() // /uteam option <subcommands> <value>
 
         if (optionsOptions?.getBoolean("displayName") != false)
             optionCommands.add(CommandAPICommand("displayName")
@@ -113,23 +112,25 @@ class UserTeams : JavaPlugin(), Listener {
                 .executesPlayer(PlayerCommandExecutor(::optionSuffix))
             )
 
-        CommandAPICommand("uteams")
-            .withAliases("uteam")
+        CommandAPICommand("uteam")
+            .apply {
+                if (config.getBoolean("override_team_command", false))
+                    withAliases("team")
+            }
             .withSubcommands(
-                CommandAPICommand("create") // /uteams create <codename> [displayName]
+                CommandAPICommand("create") // /uteam create <codename> [displayName]
                     .withRequirement{ !isInTeam(it) }
                     .withArguments(StringArgument("codename"))
                     .withOptionalArguments(ChatComponentArgument("displayName"))
                     .executesPlayer(PlayerCommandExecutor(::createTeam)),
-                CommandAPICommand("disband") // /uteams disband
-                    .withAliases("disolve")
+                CommandAPICommand("disband") // /uteam disband
                     .withRequirement(::isTeamOwner)
                     .executesPlayer(PlayerCommandExecutor(::disbandTeamInitiation))
                     .withSubcommands(
-                        CommandAPICommand("confirm") // /uteams disband confirm
+                        CommandAPICommand("confirm") // /uteam disband confirm
                             .withRequirement { isInConfirmation(it, "disband") }
                             .executesPlayer(PlayerCommandExecutor(::disbandConfirm)),
-                        CommandAPICommand("cancel") // /uteams disband cancel
+                        CommandAPICommand("cancel") // /uteam disband cancel
                             .withRequirement { isInConfirmation(it, "disband") }
                             .executesPlayer(PlayerCommandExecutor(::cancelConfirmation))
                     ),
@@ -174,9 +175,8 @@ class UserTeams : JavaPlugin(), Listener {
                             .withRequirement { isInConfirmation(it, "leave") }
                             .executesPlayer(PlayerCommandExecutor(::cancelConfirmation))
                     ),
-                CommandAPICommand("option")
+                CommandAPICommand("modify")
                     .withRequirement(::isTeamOwner)
-                    .withAliases("modify", "customize", "configure")
                     .withSubcommands(*optionCommands.toTypedArray()),
                 CommandAPICommand("list")
                     .executesPlayer(PlayerCommandExecutor(::listTeams)),
@@ -201,6 +201,8 @@ class UserTeams : JavaPlugin(), Listener {
     override fun onEnable() {
         // Plugin startup logic
         saveDefaultConfig()
+        ownerScoreboard = loadScoreboard("owner_scoreboard")
+        invitationScoreboard = loadScoreboard("invitation_scoreboard")
         CommandAPI.onEnable()
         saveResource("translations/default.yml", true)
         supportedTranslations.forEach {
@@ -224,38 +226,50 @@ class UserTeams : JavaPlugin(), Listener {
 
     override fun onDisable() {
         // Plugin shutdown logic
-        saveScoreboards()
+        //saveScoreboards()
         CommandAPI.onDisable()
     }
 
+    /*
     @EventHandler
     private fun onWorldSave(event: WorldSaveEvent) {
-        saveScoreboards()
+        if (event.world == server.worlds[0])
+            saveScoreboards()
     }
 
     private fun saveScoreboards() {
-        try {
-            val ownerStream = BukkitObjectOutputStream(GZIPOutputStream(FileOutputStream(dataFolder.resolve("ownerScoreboard.dat"))))
-            ownerStream.writeObject(ownerScoreboard)
-            ownerStream.close()
-            val invitationStream = BukkitObjectOutputStream(GZIPOutputStream(FileOutputStream(dataFolder.resolve("invitationScoreboard.dat"))))
-            invitationStream.writeObject(invitationScoreboard)
-            invitationStream.close()
-        } catch (e: Exception) {
-            logger.warning(e.stackTraceToString())
+        logger.info("attempting to save scoreboards")
+        ((ownerScoreboard as CraftScoreboard).handle as ServerScoreboard).dataFactory().constructor.get().let {
+            it.setDirty()
+            it.save(
+                (if (saveInWorld) server.worlds[0].worldFolder else dataFolder)
+                    .resolve("data/ownerScoreboard.dat").apply { parentFile.mkdirs(); createNewFile() }
+            )
+        }
+        ((invitationScoreboard as CraftScoreboard).handle as ServerScoreboard).dataFactory().constructor.get().let {
+            it.setDirty()
+            it.save(
+                (if (saveInWorld) server.worlds[0].worldFolder else dataFolder)
+                    .resolve("data/invitationScoreboard.dat").apply { parentFile.mkdirs(); createNewFile() }
+            )
         }
     }
+    */
 
-    private fun loadScoreboard(file: String): Scoreboard {
-        try {
-            val stream = BukkitObjectInputStream(GZIPInputStream(FileInputStream(dataFolder.resolve(file))))
-            val scoreboard = stream.readObject() as Scoreboard
-            stream.close()
-            return scoreboard
-        } catch (e: Exception) {
-            logger.warning(e.stackTraceToString())
-            return server.scoreboardManager?.newScoreboard!!
+    private fun loadScoreboard(scoreboardFile: String): Scoreboard {
+        logger.info("attempting to load $scoreboardFile")
+        val scoreboard = server.scoreboardManager?.newScoreboard!! as CraftScoreboard
+        (server.worlds.first() as CraftWorld).handle.dataStorage.computeIfAbsent((scoreboard.handle as ServerScoreboard).dataFactory(), scoreboardFile)
+        /*
+        NbtIo.read(
+            (if (saveInWorld) server.worlds[0].worldFolder else dataFolder)
+                .resolve(scoreboardFile).toPath()
+        )?.let {
+            ((scoreboard as CraftScoreboard).handle as ServerScoreboard).dataFactory().deserializer.apply(it.getCompound("data"))
+            logger.info("should have loaded $scoreboardFile")
         }
+        */
+        return scoreboard
     }
 
     private fun isTeamOwner(sender: CommandSender): Boolean {
@@ -267,7 +281,7 @@ class UserTeams : JavaPlugin(), Listener {
     }
 
     private fun hasInvites(sender: CommandSender): Boolean {
-        return invitationScoreboard.entries.any { it.startsWith(sender.name) }
+        return invitationScoreboard.teams.any { it.entries.contains(sender.name) }
     }
 
     private fun teammatesFilter(info: SuggestionInfo<CommandSender>): Array<OfflinePlayer> {
@@ -323,10 +337,10 @@ class UserTeams : JavaPlugin(), Listener {
             *ComponentBuilder(getTranslation("disband_initiation", sender.locale))
                 .append("\n[").color(ChatColor.GRAY)
                 .append(getTranslation("yes", sender.locale)).color(ChatColor.GREEN).bold(true)
-                .event(ClickEvent(ClickEvent.Action.RUN_COMMAND, "/uteams disband confirm"))
+                .event(ClickEvent(ClickEvent.Action.RUN_COMMAND, "/uteam disband confirm"))
                 .append("/").color(ChatColor.GRAY).bold(false)
                 .append(getTranslation("no", sender.locale)).color(ChatColor.RED).bold(true)
-                .event(ClickEvent(ClickEvent.Action.RUN_COMMAND, "/uteams disband cancel"))
+                .event(ClickEvent(ClickEvent.Action.RUN_COMMAND, "/uteam disband cancel"))
                 .append("]").color(ChatColor.GRAY).bold(false)
                 .create()
         )
@@ -355,10 +369,10 @@ class UserTeams : JavaPlugin(), Listener {
             *ComponentBuilder(getTranslation("kick_initiation", sender.locale).replace("%s", playerName))
                 .append("\n[").color(ChatColor.GRAY)
                 .append(getTranslation("yes", sender.locale)).color(ChatColor.GREEN).bold(true)
-                .event(ClickEvent(ClickEvent.Action.RUN_COMMAND, "/uteams kick $playerName confirm"))
+                .event(ClickEvent(ClickEvent.Action.RUN_COMMAND, "/uteam kick $playerName confirm"))
                 .append("/").color(ChatColor.GRAY).bold(false)
                 .append(getTranslation("no", sender.locale)).color(ChatColor.RED).bold(true)
-                .event(ClickEvent(ClickEvent.Action.RUN_COMMAND, "/uteams kick $playerName cancel"))
+                .event(ClickEvent(ClickEvent.Action.RUN_COMMAND, "/uteam kick $playerName cancel"))
                 .append("]").color(ChatColor.GRAY).bold(false)
                 .create()
         )
@@ -386,10 +400,10 @@ class UserTeams : JavaPlugin(), Listener {
             *ComponentBuilder(getTranslation("leave_initiation", sender.locale))
                 .append("\n[").color(ChatColor.GRAY)
                 .append(getTranslation("yes", sender.locale)).color(ChatColor.GREEN).bold(true)
-                .event(ClickEvent(ClickEvent.Action.RUN_COMMAND, "/uteams leave confirm"))
+                .event(ClickEvent(ClickEvent.Action.RUN_COMMAND, "/uteam leave confirm"))
                 .append("/").color(ChatColor.GRAY).bold(false)
                 .append(getTranslation("no", sender.locale)).color(ChatColor.RED).bold(true)
-                .event(ClickEvent(ClickEvent.Action.RUN_COMMAND, "/uteams leave cancel"))
+                .event(ClickEvent(ClickEvent.Action.RUN_COMMAND, "/uteam leave cancel"))
                 .append("]").color(ChatColor.GRAY).bold(false)
                 .create()
         )
@@ -415,10 +429,10 @@ class UserTeams : JavaPlugin(), Listener {
             *ComponentBuilder(getTranslation("transfer_initiation", sender.locale).replace("%s", playerName))
                 .append("\n[").color(ChatColor.GRAY)
                 .append(getTranslation("yes", sender.locale)).color(ChatColor.GREEN).bold(true)
-                .event(ClickEvent(ClickEvent.Action.RUN_COMMAND, "/uteams transfer $playerName confirm"))
+                .event(ClickEvent(ClickEvent.Action.RUN_COMMAND, "/uteam transfer $playerName confirm"))
                 .append("/").color(ChatColor.GRAY).bold(false)
                 .append(getTranslation("no", sender.locale)).color(ChatColor.RED).bold(true)
-                .event(ClickEvent(ClickEvent.Action.RUN_COMMAND, "/uteams transfer $playerName cancel"))
+                .event(ClickEvent(ClickEvent.Action.RUN_COMMAND, "/uteam transfer $playerName cancel"))
                 .append("]").color(ChatColor.GRAY).bold(false)
                 .create()
         )
@@ -506,18 +520,18 @@ class UserTeams : JavaPlugin(), Listener {
                     .append(translation.getOrNull(1) ?: "").color(ChatColor.WHITE)
                     .append("\n[").color(ChatColor.GRAY)
                     .append(getTranslation("accept", player.locale)).color(ChatColor.GREEN).bold(true)
-                    .event(ClickEvent(ClickEvent.Action.RUN_COMMAND, "/uteams invite ${team.name} accept"))
+                    .event(ClickEvent(ClickEvent.Action.RUN_COMMAND, "/uteam invite ${team.name} accept"))
                     .append("/").color(ChatColor.GRAY).bold(false)
                     .append(getTranslation("decline", player.locale)).color(ChatColor.RED).bold(true)
-                    .event(ClickEvent(ClickEvent.Action.RUN_COMMAND, "/uteams invite ${team.name} decline"))
+                    .event(ClickEvent(ClickEvent.Action.RUN_COMMAND, "/uteam invite ${team.name} decline"))
                     .append("]").color(ChatColor.GRAY).bold(false)
                     .create()
             )
         } catch (e: Exception) {
             logger.warning(e.stackTraceToString())
             player.sendMessage(getTranslation("invite_received", player.locale).replace("%s", team.displayName) + "\n" +
-                    getTranslation("accept", player.locale) + " /uteams invite ${team.name} accept\n" +
-                    getTranslation("decline", player.locale) + " /uteams invite ${team.name} decline")
+                    getTranslation("accept", player.locale) + " /uteam invite ${team.name} accept\n" +
+                    getTranslation("decline", player.locale) + " /uteam invite ${team.name} decline")
         }
     }
 
