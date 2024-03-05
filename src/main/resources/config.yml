@@ -1,5 +1,8 @@
 # If true, the /team command will be overridden with the functionality of this plugin.
-# To use the vanilla /team command, you'll have to use /minecraft:team.
+# This will mess with the vanilla /team command
+# OPs will see both the vanilla and the plugin's subcommands mixed together.
+# Datapacks and command blocks that use /team might break.
+# Not recommended.
 override_team_command: false
 
 # What aspects of a team can be modified by a team owner.
