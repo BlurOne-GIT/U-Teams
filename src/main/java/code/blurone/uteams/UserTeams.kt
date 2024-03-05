@@ -570,9 +570,9 @@ class UserTeams : JavaPlugin(), Listener {
         val teams = ownerScoreboard.teams.map { mainScoreboard.getTeam(it.name)!! }
         if (teams.isEmpty())
             return sender.sendMessage(getTranslation("no_teams", sender.locale))
-        val builder = ComponentBuilder(getTranslation("teams", sender.locale).replace("%s", teams.size.toString()))
+        val builder = ComponentBuilder(getTranslation("teams", sender.locale).replace("%s", teams.size.toString()) + "\n")
         teams.forEach {
-            val owner = mainScoreboard.getTeam("${it.name}:owner")!!.entries.first().removeSuffix(":owner")
+            val owner = ownerScoreboard.getTeam(it.name)!!.entries.first()
             val membersComponent = ComponentBuilder(owner).bold(true).append("").bold(false)
             it.entries.forEach { entry ->
                 if (entry != owner)
@@ -584,11 +584,12 @@ class UserTeams : JavaPlugin(), Listener {
             */
 
             builder
-                .append(it.displayName).color(it.color.asBungee())
-                .event(HoverEvent(HoverEvent.Action.SHOW_TEXT, Text(it.name)))
-                .append(" - ").color(ChatColor.GRAY)
+                .append("[").color(it.color.asBungee())
+                .append(it.displayName).event(HoverEvent(HoverEvent.Action.SHOW_TEXT, Text(it.name)))
+                .append("]").reset().color(it.color.asBungee())
+                .append(" - ").reset().color(ChatColor.GRAY)
                 .append(getTranslation("members", sender.locale).replace("%s", it.entries.size.toString())).color(ChatColor.WHITE)
-                //.event(HoverEvent(HoverEvent.Action.SHOW_TEXT, Text(membersComponent.create())))
+                .event(HoverEvent(HoverEvent.Action.SHOW_TEXT, Text(membersComponent.create())))
         }
         sender.spigot().sendMessage(*builder.create())
     }
