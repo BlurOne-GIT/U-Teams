@@ -232,45 +232,10 @@ class UserTeams : JavaPlugin(), Listener {
         CommandAPI.onDisable()
     }
 
-    /*
-    @EventHandler
-    private fun onWorldSave(event: WorldSaveEvent) {
-        if (event.world == server.worlds[0])
-            saveScoreboards()
-    }
-
-    private fun saveScoreboards() {
-        logger.info("attempting to save scoreboards")
-        ((ownerScoreboard as CraftScoreboard).handle as ServerScoreboard).dataFactory().constructor.get().let {
-            it.setDirty()
-            it.save(
-                (if (saveInWorld) server.worlds[0].worldFolder else dataFolder)
-                    .resolve("data/ownerScoreboard.dat").apply { parentFile.mkdirs(); createNewFile() }
-            )
-        }
-        ((invitationScoreboard as CraftScoreboard).handle as ServerScoreboard).dataFactory().constructor.get().let {
-            it.setDirty()
-            it.save(
-                (if (saveInWorld) server.worlds[0].worldFolder else dataFolder)
-                    .resolve("data/invitationScoreboard.dat").apply { parentFile.mkdirs(); createNewFile() }
-            )
-        }
-    }
-    */
-
     private fun loadScoreboard(scoreboardFile: String): Scoreboard {
         logger.info("attempting to load $scoreboardFile")
         val scoreboard = server.scoreboardManager?.newScoreboard!! as CraftScoreboard
         (server.worlds.first() as CraftWorld).handle.dataStorage.computeIfAbsent((scoreboard.handle as ServerScoreboard).dataFactory(), scoreboardFile)
-        /*
-        NbtIo.read(
-            (if (saveInWorld) server.worlds[0].worldFolder else dataFolder)
-                .resolve(scoreboardFile).toPath()
-        )?.let {
-            ((scoreboard as CraftScoreboard).handle as ServerScoreboard).dataFactory().deserializer.apply(it.getCompound("data"))
-            logger.info("should have loaded $scoreboardFile")
-        }
-        */
         return scoreboard
     }
 
@@ -340,10 +305,10 @@ class UserTeams : JavaPlugin(), Listener {
                 .append("\n[").color(ChatColor.GRAY)
                 .append(getTranslation("yes", sender.locale)).color(ChatColor.GREEN).bold(true)
                 .event(ClickEvent(ClickEvent.Action.RUN_COMMAND, "/uteam disband confirm"))
-                .append("/").color(ChatColor.GRAY).bold(false)
+                .append("/").reset().color(ChatColor.GRAY)
                 .append(getTranslation("no", sender.locale)).color(ChatColor.RED).bold(true)
                 .event(ClickEvent(ClickEvent.Action.RUN_COMMAND, "/uteam disband cancel"))
-                .append("]").color(ChatColor.GRAY).bold(false)
+                .append("]").reset().color(ChatColor.GRAY)
                 .create()
         )
     }
@@ -372,10 +337,10 @@ class UserTeams : JavaPlugin(), Listener {
                 .append("\n[").color(ChatColor.GRAY)
                 .append(getTranslation("yes", sender.locale)).color(ChatColor.GREEN).bold(true)
                 .event(ClickEvent(ClickEvent.Action.RUN_COMMAND, "/uteam kick $playerName confirm"))
-                .append("/").color(ChatColor.GRAY).bold(false)
+                .append("/").reset().color(ChatColor.GRAY)
                 .append(getTranslation("no", sender.locale)).color(ChatColor.RED).bold(true)
                 .event(ClickEvent(ClickEvent.Action.RUN_COMMAND, "/uteam kick $playerName cancel"))
-                .append("]").color(ChatColor.GRAY).bold(false)
+                .append("]").reset().color(ChatColor.GRAY)
                 .create()
         )
     }
@@ -403,10 +368,10 @@ class UserTeams : JavaPlugin(), Listener {
                 .append("\n[").color(ChatColor.GRAY)
                 .append(getTranslation("yes", sender.locale)).color(ChatColor.GREEN).bold(true)
                 .event(ClickEvent(ClickEvent.Action.RUN_COMMAND, "/uteam leave confirm"))
-                .append("/").color(ChatColor.GRAY).bold(false)
+                .append("/").reset().color(ChatColor.GRAY)
                 .append(getTranslation("no", sender.locale)).color(ChatColor.RED).bold(true)
                 .event(ClickEvent(ClickEvent.Action.RUN_COMMAND, "/uteam leave cancel"))
-                .append("]").color(ChatColor.GRAY).bold(false)
+                .append("]").reset().color(ChatColor.GRAY)
                 .create()
         )
     }
@@ -432,10 +397,10 @@ class UserTeams : JavaPlugin(), Listener {
                 .append("\n[").color(ChatColor.GRAY)
                 .append(getTranslation("yes", sender.locale)).color(ChatColor.GREEN).bold(true)
                 .event(ClickEvent(ClickEvent.Action.RUN_COMMAND, "/uteam transfer $playerName confirm"))
-                .append("/").color(ChatColor.GRAY).bold(false)
+                .append("/").reset().color(ChatColor.GRAY)
                 .append(getTranslation("no", sender.locale)).color(ChatColor.RED).bold(true)
                 .event(ClickEvent(ClickEvent.Action.RUN_COMMAND, "/uteam transfer $playerName cancel"))
-                .append("]").color(ChatColor.GRAY).bold(false)
+                .append("]").reset().color(ChatColor.GRAY)
                 .create()
         )
     }
@@ -518,8 +483,10 @@ class UserTeams : JavaPlugin(), Listener {
         try {
             player.spigot().sendMessage(
                 *ComponentBuilder(translation[0])
-                    .append(team.displayName).color(team.color.asBungee())
-                    .append(translation.getOrNull(1) ?: "").color(ChatColor.WHITE)
+                    .append("[").color(team.color.asBungee())
+                    .append(team.displayName)
+                    .append("]").reset().color(team.color.asBungee())
+                    .append(translation.getOrNull(1) ?: "").reset()
                     .append("\n[").color(ChatColor.GRAY)
                     .append(getTranslation("accept", player.locale)).color(ChatColor.GREEN).bold(true)
                     .event(ClickEvent(ClickEvent.Action.RUN_COMMAND, "/uteam join ${team.name} accept"))
