@@ -140,13 +140,15 @@ class UserTeams : JavaPlugin(), Listener {
                         .replaceSafeSuggestions(SafeSuggestions.suggest(::teamlessFilter))
                     )
                     .executesPlayer(PlayerCommandExecutor(::invitePlayer)),
-                CommandAPICommand("invite")
+                CommandAPICommand("join")
                     .withRequirement(::hasInvites)
                     .withArguments(TeamArgument("team").replaceSafeSuggestions(SafeSuggestions.suggest(::invitedTeamsFilter)))
                     .withSubcommands(
                         CommandAPICommand("accept")
+                            .withRequirement(::hasInvites)
                             .executesPlayer(PlayerCommandExecutor(::acceptInvite)),
                         CommandAPICommand("decline")
+                            .withRequirement(::hasInvites)
                             .executesPlayer(PlayerCommandExecutor(::declineInvite))
                     ),
                 CommandAPICommand("kick")
@@ -520,18 +522,18 @@ class UserTeams : JavaPlugin(), Listener {
                     .append(translation.getOrNull(1) ?: "").color(ChatColor.WHITE)
                     .append("\n[").color(ChatColor.GRAY)
                     .append(getTranslation("accept", player.locale)).color(ChatColor.GREEN).bold(true)
-                    .event(ClickEvent(ClickEvent.Action.RUN_COMMAND, "/uteam invite ${team.name} accept"))
-                    .append("/").color(ChatColor.GRAY).bold(false)
+                    .event(ClickEvent(ClickEvent.Action.RUN_COMMAND, "/uteam join ${team.name} accept"))
+                    .append("/").reset().color(ChatColor.GRAY)
                     .append(getTranslation("decline", player.locale)).color(ChatColor.RED).bold(true)
-                    .event(ClickEvent(ClickEvent.Action.RUN_COMMAND, "/uteam invite ${team.name} decline"))
-                    .append("]").color(ChatColor.GRAY).bold(false)
+                    .event(ClickEvent(ClickEvent.Action.RUN_COMMAND, "/uteam join ${team.name} decline"))
+                    .append("]").reset().color(ChatColor.GRAY)
                     .create()
             )
         } catch (e: Exception) {
             logger.warning(e.stackTraceToString())
             player.sendMessage(getTranslation("invite_received", player.locale).replace("%s", team.displayName) + "\n" +
-                    getTranslation("accept", player.locale) + " /uteam invite ${team.name} accept\n" +
-                    getTranslation("decline", player.locale) + " /uteam invite ${team.name} decline")
+                    getTranslation("accept", player.locale) + " /uteam join ${team.name} accept\n" +
+                    getTranslation("decline", player.locale) + " /uteam join ${team.name} decline")
         }
     }
 
