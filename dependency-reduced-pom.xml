@@ -155,12 +155,12 @@
     <dependency>
       <groupId>org.jetbrains.kotlin</groupId>
       <artifactId>kotlin-test</artifactId>
-      <version>1.9.22</version>
+      <version>1.9.24</version>
       <scope>test</scope>
     </dependency>
   </dependencies>
   <properties>
-    <kotlin.version>1.9.22</kotlin.version>
+    <kotlin.version>1.9.24</kotlin.version>
     <java.version>1.8</java.version>
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
   </properties>

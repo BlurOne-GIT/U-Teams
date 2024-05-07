@@ -7,13 +7,17 @@ import dev.jorel.commandapi.SuggestionInfo
 import dev.jorel.commandapi.arguments.*
 import dev.jorel.commandapi.executors.CommandArguments
 import dev.jorel.commandapi.executors.PlayerCommandExecutor
-import net.md_5.bungee.api.ChatColor
+import net.kyori.adventure.platform.bukkit.BukkitAudiences
+import net.kyori.adventure.text.Component
+import net.kyori.adventure.text.event.HoverEvent
+import net.kyori.adventure.text.format.NamedTextColor
+import net.kyori.adventure.text.format.Style
+import net.kyori.adventure.text.format.TextColor
+import net.kyori.adventure.text.format.TextDecoration
 import net.md_5.bungee.api.chat.BaseComponent
-import net.md_5.bungee.api.chat.ClickEvent
 import net.md_5.bungee.api.chat.ComponentBuilder
-import net.md_5.bungee.api.chat.HoverEvent
-import net.md_5.bungee.api.chat.hover.content.Text
 import net.minecraft.server.ServerScoreboard
+import org.bukkit.ChatColor
 import org.bukkit.NamespacedKey
 import org.bukkit.OfflinePlayer
 import org.bukkit.command.CommandSender
@@ -28,6 +32,7 @@ import org.bukkit.persistence.PersistentDataType
 import org.bukkit.plugin.java.JavaPlugin
 import org.bukkit.scoreboard.Scoreboard
 import org.bukkit.scoreboard.Team
+import java.awt.Color
 import java.io.File
 
 // I'm not proud of this code. It looks horrible.
@@ -38,6 +43,19 @@ class UserTeams : JavaPlugin(), Listener {
     private lateinit var ownerScoreboard: Scoreboard
     private lateinit var invitationScoreboard: Scoreboard
     private val confirmationNamespacedKey = NamespacedKey(this, "confirmation")
+    private val yesStyle = Style.style(NamedTextColor.GREEN, TextDecoration.BOLD, TextDecoration.UNDERLINED)
+    private val noStyle = Style.style(NamedTextColor.RED, TextDecoration.BOLD, TextDecoration.UNDERLINED)
+
+    private var adventure: BukkitAudiences? = null
+
+    private fun adventure(): BukkitAudiences {
+        checkNotNull(this.adventure) { "Tried to access Adventure when the plugin was disabled!" }
+        return this.adventure!!
+    }
+
+    private fun toTextColor(chatColor: ChatColor): TextColor {
+        return TextColor.color((chatColor.asBungee().color ?: Color.WHITE).rgb)
+    }
 
     override fun onLoad() {
         CommandAPI.onLoad(CommandAPIBukkitConfig(this)
@@ -224,12 +242,17 @@ class UserTeams : JavaPlugin(), Listener {
             }
         }
         server.pluginManager.registerEvents(this, this)
+        adventure = BukkitAudiences.create(this)
     }
 
     override fun onDisable() {
         // Plugin shutdown logic
         //saveScoreboards()
         CommandAPI.onDisable()
+        if (adventure != null) {
+            adventure!!.close()
+            adventure = null
+        }
     }
 
     private fun loadScoreboard(scoreboardFile: String): Scoreboard {
@@ -300,16 +323,17 @@ class UserTeams : JavaPlugin(), Listener {
     private fun disbandTeamInitiation(sender: Player, args: CommandArguments) {
         sender.persistentDataContainer.set(confirmationNamespacedKey, PersistentDataType.STRING, "disband")
         CommandAPI.updateRequirements(sender)
-        sender.spigot().sendMessage(
-            *ComponentBuilder(getTranslation("disband_initiation", sender.locale))
-                .append("\n[").color(ChatColor.GRAY)
-                .append(getTranslation("yes", sender.locale)).color(ChatColor.GREEN).bold(true)
-                .event(ClickEvent(ClickEvent.Action.RUN_COMMAND, "/uteam disband confirm"))
-                .append("/").reset().color(ChatColor.GRAY)
-                .append(getTranslation("no", sender.locale)).color(ChatColor.RED).bold(true)
-                .event(ClickEvent(ClickEvent.Action.RUN_COMMAND, "/uteam disband cancel"))
-                .append("]").reset().color(ChatColor.GRAY)
-                .create()
+        adventure().player(sender).sendMessage(
+            Component.text()
+                .content(getTranslation("disband_initiation", sender.locale))
+                .appendNewline()
+                .append(Component.text("[", NamedTextColor.GRAY))
+                .append(Component.text(getTranslation("yes", sender.locale), yesStyle)
+                    .clickEvent(net.kyori.adventure.text.event.ClickEvent.runCommand("/uteam disband confirm")))
+                .append(Component.text("/", NamedTextColor.GRAY))
+                .append(Component.text(getTranslation("no", sender.locale), noStyle)
+                    .clickEvent(net.kyori.adventure.text.event.ClickEvent.runCommand("/uteam disband cancel")))
+                .append(Component.text("]", NamedTextColor.GRAY))
         )
     }
 
@@ -332,16 +356,17 @@ class UserTeams : JavaPlugin(), Listener {
         val playerName = (args["player"] as OfflinePlayer).name!!
         sender.persistentDataContainer.set(confirmationNamespacedKey, PersistentDataType.STRING, "kick")
         CommandAPI.updateRequirements(sender)
-        sender.spigot().sendMessage(
-            *ComponentBuilder(getTranslation("kick_initiation", sender.locale).replace("%s", playerName))
-                .append("\n[").color(ChatColor.GRAY)
-                .append(getTranslation("yes", sender.locale)).color(ChatColor.GREEN).bold(true)
-                .event(ClickEvent(ClickEvent.Action.RUN_COMMAND, "/uteam kick $playerName confirm"))
-                .append("/").reset().color(ChatColor.GRAY)
-                .append(getTranslation("no", sender.locale)).color(ChatColor.RED).bold(true)
-                .event(ClickEvent(ClickEvent.Action.RUN_COMMAND, "/uteam kick $playerName cancel"))
-                .append("]").reset().color(ChatColor.GRAY)
-                .create()
+        adventure().player(sender).sendMessage(
+            Component.text()
+                .content(getTranslation("kick_initiation", sender.locale).replace("%s", playerName))
+                .appendNewline()
+                .append(Component.text("[", NamedTextColor.GRAY))
+                .append(Component.text(getTranslation("yes", sender.locale), yesStyle)
+                    .clickEvent(net.kyori.adventure.text.event.ClickEvent.runCommand("/uteam kick $playerName confirm")))
+                .append(Component.text("/", NamedTextColor.GRAY))
+                .append(Component.text(getTranslation("no", sender.locale), noStyle)
+                    .clickEvent(net.kyori.adventure.text.event.ClickEvent.runCommand("/uteam kick $playerName cancel")))
+                .append(Component.text("]", NamedTextColor.GRAY))
         )
     }
 
@@ -363,16 +388,17 @@ class UserTeams : JavaPlugin(), Listener {
     private fun leaveTeamInitiation(sender: Player, args: CommandArguments) {
         sender.persistentDataContainer.set(confirmationNamespacedKey, PersistentDataType.STRING, "leave")
         CommandAPI.updateRequirements(sender)
-        sender.spigot().sendMessage(
-            *ComponentBuilder(getTranslation("leave_initiation", sender.locale))
-                .append("\n[").color(ChatColor.GRAY)
-                .append(getTranslation("yes", sender.locale)).color(ChatColor.GREEN).bold(true)
-                .event(ClickEvent(ClickEvent.Action.RUN_COMMAND, "/uteam leave confirm"))
-                .append("/").reset().color(ChatColor.GRAY)
-                .append(getTranslation("no", sender.locale)).color(ChatColor.RED).bold(true)
-                .event(ClickEvent(ClickEvent.Action.RUN_COMMAND, "/uteam leave cancel"))
-                .append("]").reset().color(ChatColor.GRAY)
-                .create()
+        adventure().player(sender).sendMessage(
+            Component.text()
+                .content(getTranslation("leave_initiation", sender.locale))
+                .appendNewline()
+                .append(Component.text("[", NamedTextColor.GRAY))
+                .append(Component.text(getTranslation("yes", sender.locale), yesStyle)
+                    .clickEvent(net.kyori.adventure.text.event.ClickEvent.runCommand("/uteam leave confirm")))
+                .append(Component.text("/", NamedTextColor.GRAY))
+                .append(Component.text(getTranslation("no", sender.locale), noStyle)
+                    .clickEvent(net.kyori.adventure.text.event.ClickEvent.runCommand("/uteam leave cancel")))
+                .append(Component.text("]", NamedTextColor.GRAY))
         )
     }
 
@@ -392,16 +418,17 @@ class UserTeams : JavaPlugin(), Listener {
         val playerName = (args["player"] as OfflinePlayer).name!!
         sender.persistentDataContainer.set(confirmationNamespacedKey, PersistentDataType.STRING, "transfer")
         CommandAPI.updateRequirements(sender)
-        sender.spigot().sendMessage(
-            *ComponentBuilder(getTranslation("transfer_initiation", sender.locale).replace("%s", playerName))
-                .append("\n[").color(ChatColor.GRAY)
-                .append(getTranslation("yes", sender.locale)).color(ChatColor.GREEN).bold(true)
-                .event(ClickEvent(ClickEvent.Action.RUN_COMMAND, "/uteam transfer $playerName confirm"))
-                .append("/").reset().color(ChatColor.GRAY)
-                .append(getTranslation("no", sender.locale)).color(ChatColor.RED).bold(true)
-                .event(ClickEvent(ClickEvent.Action.RUN_COMMAND, "/uteam transfer $playerName cancel"))
-                .append("]").reset().color(ChatColor.GRAY)
-                .create()
+        adventure().player(sender).sendMessage(
+            Component.text()
+                .content(getTranslation("transfer_initiation", sender.locale).replace("%s", playerName))
+                .appendNewline()
+                .append(Component.text("[", NamedTextColor.GRAY))
+                .append(Component.text(getTranslation("yes", sender.locale), yesStyle)
+                    .clickEvent(net.kyori.adventure.text.event.ClickEvent.runCommand("/uteam transfer $playerName confirm")))
+                .append(Component.text("/", NamedTextColor.GRAY))
+                .append(Component.text(getTranslation("no", sender.locale), noStyle)
+                    .clickEvent(net.kyori.adventure.text.event.ClickEvent.runCommand("/uteam transfer $playerName cancel")))
+                .append(Component.text("]", NamedTextColor.GRAY))
         )
     }
 
@@ -428,7 +455,7 @@ class UserTeams : JavaPlugin(), Listener {
     }
 
     private fun optionColor(sender: Player, args: CommandArguments) {
-        mainScoreboard.getEntryTeam(sender.name)?.color = (args["value"] as org.bukkit.ChatColor)
+        mainScoreboard.getEntryTeam(sender.name)?.color = (args["value"] as ChatColor)
     }
 
     private fun optionFriendlyFire(sender: Player, args: CommandArguments) {
@@ -483,28 +510,22 @@ class UserTeams : JavaPlugin(), Listener {
 
     private fun sendInvite(player: Player, team: Team) {
         val translation = getTranslation("invite_received", player.locale).split("%s")
-        try {
-            player.spigot().sendMessage(
-                *ComponentBuilder(translation[0])
-                    .append("[").color(team.color.asBungee())
-                    .append(team.displayName)
-                    .append("]").reset().color(team.color.asBungee())
-                    .append(translation.getOrNull(1) ?: "").reset()
-                    .append("\n[").color(ChatColor.GRAY)
-                    .append(getTranslation("accept", player.locale)).color(ChatColor.GREEN).bold(true)
-                    .event(ClickEvent(ClickEvent.Action.RUN_COMMAND, "/uteam join ${team.name} accept"))
-                    .append("/").reset().color(ChatColor.GRAY)
-                    .append(getTranslation("decline", player.locale)).color(ChatColor.RED).bold(true)
-                    .event(ClickEvent(ClickEvent.Action.RUN_COMMAND, "/uteam join ${team.name} decline"))
-                    .append("]").reset().color(ChatColor.GRAY)
-                    .create()
-            )
-        } catch (e: Exception) {
-            logger.warning(e.stackTraceToString())
-            player.sendMessage(getTranslation("invite_received", player.locale).replace("%s", team.displayName) + "\n" +
-                    getTranslation("accept", player.locale) + " /uteam join ${team.name} accept\n" +
-                    getTranslation("decline", player.locale) + " /uteam join ${team.name} decline")
-        }
+        adventure().player(player).sendMessage(
+            Component.text()
+                .content(translation[0])
+                .append(Component.text("[", toTextColor(team.color)))
+                .append(Component.text(team.displayName))
+                .append(Component.text("]", toTextColor(team.color)))
+                .apply { translation.getOrNull(1)?.let { t -> it.append(Component.text(t)) } }
+                .appendNewline()
+                .append(Component.text("[", NamedTextColor.GRAY))
+                .append(Component.text(getTranslation("accept", player.locale), yesStyle)
+                    .clickEvent(net.kyori.adventure.text.event.ClickEvent.runCommand("/uteam join ${team.name} confirm")))
+                .append(Component.text("/", NamedTextColor.GRAY))
+                .append(Component.text(getTranslation("decline", player.locale), noStyle)
+                    .clickEvent(net.kyori.adventure.text.event.ClickEvent.runCommand("/uteam join ${team.name} cancel")))
+                .append(Component.text("]", NamedTextColor.GRAY))
+        )
     }
 
     private fun acceptInvite(sender: Player, args: CommandArguments) {
@@ -540,28 +561,29 @@ class UserTeams : JavaPlugin(), Listener {
         val teams = ownerScoreboard.teams.map { mainScoreboard.getTeam(it.name)!! }
         if (teams.isEmpty())
             return sender.sendMessage(getTranslation("no_teams", sender.locale))
-        val builder = ComponentBuilder(getTranslation("teams", sender.locale).replace("%s", teams.size.toString()) + "\n")
+        val componentStack = Component.text(getTranslation("teams", sender.locale).replace("%s", teams.size.toString()))
         teams.forEach {
             val owner = ownerScoreboard.getTeam(it.name)!!.entries.first()
-            val membersComponent = ComponentBuilder(owner).bold(true).append("").bold(false)
+            //val membersComponent = ComponentBuilder(owner).bold(true).append("").bold(false)
+            val membersComponent = Component.text(owner).decorate(TextDecoration.BOLD)
             it.entries.forEach { entry ->
                 if (entry != owner)
-                    membersComponent.append("\n").append(entry)
+                    membersComponent.appendNewline().append(Component.text(entry))
             }
-            /*
-            val memberList = it.entries.filterNot { entry -> entry == owner }.map { entry -> Text(entry) }.toMutableList()
-            memberList.add(0, Text(ComponentBuilder(owner).bold(true).create()))
-            */
 
-            builder
-                .append("[").color(it.color.asBungee())
-                .append(it.displayName).event(HoverEvent(HoverEvent.Action.SHOW_TEXT, Text(it.name)))
-                .append("]").reset().color(it.color.asBungee())
-                .append(" - ").reset().color(ChatColor.GRAY)
-                .append(getTranslation("members", sender.locale).replace("%s", it.entries.size.toString())).color(ChatColor.WHITE)
-                .event(HoverEvent(HoverEvent.Action.SHOW_TEXT, Text(membersComponent.create())))
+            val teamTextColor = toTextColor(it.color)
+
+            componentStack
+                .appendNewline()
+                .append(Component.text("[", teamTextColor))
+                .append(Component.text(it.displayName).hoverEvent(HoverEvent.showText(Component.text(it.name))))
+                .append(Component.text("]", teamTextColor))
+                .append(Component.text(" - ", NamedTextColor.GRAY))
+                .append(Component.text(getTranslation("members", sender.locale).replace("%s", it.entries.size.toString()))
+                    .hoverEvent(HoverEvent.showText(membersComponent))
+                )
         }
-        sender.spigot().sendMessage(*builder.create())
+        adventure().player(sender).sendMessage(componentStack)
     }
 
     companion object {
