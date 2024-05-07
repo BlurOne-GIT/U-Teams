@@ -468,7 +468,10 @@ class UserTeams : JavaPlugin(), Listener {
         val team = mainScoreboard.getEntryTeam(sender.name)!!
         val teamName = team.name
         invitationScoreboard.getTeam(teamName)?.addEntry("${player.name}+$teamName")
-        player.player?.let { sendInvite(it, team) }
+        player.player?.let {
+            CommandAPI.updateRequirements(it)
+            sendInvite(it, team)
+        }
     }
 
     @EventHandler
